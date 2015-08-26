@@ -15,8 +15,9 @@ package com.devexperts.egen.processor.tools;
 import com.devexperts.egen.processor.AutoSerializableProcessor;
 import com.devexperts.egen.processor.CompactConfiguration;
 import com.sun.tools.javac.code.Attribute;
-import com.sun.tools.javac.code.TypeTags;
+import com.sun.tools.javac.code.TypeTag;
 import com.sun.tools.javac.model.JavacElements;
+import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.TreeMaker;
 import com.sun.tools.javac.util.List;
 import com.sun.tools.javac.util.Pair;
@@ -85,10 +86,21 @@ public class StatementFactory {
         }
     }
 
+    /**
+     * Encapsulates questionable change of old maker.Literal(NULL_LITERAL, null)
+     * is our TypeTag.XXXX adequate representation of NULL_LITERAL
+     * @return
+     * TODO: review this method
+     */
+    private JCLiteral nullLiteral() {
+        return maker.Literal(TypeTag.UNINITIALIZED_OBJECT, null);
+    }
+
     public JCStatement inlineWriteStatement() {
         JCExpression expression = ident(var.name.toString());
 
-        JCExpression condition = maker.Binary(OpCode.NOT_EQUALS.value, expression, maker.Literal(NULL_LITERAL, null));
+        // see comments to nullLiteral()
+        JCExpression condition = maker.Binary(Tag.NE, expression, nullLiteral());
 
         JCExpression writeExpression = maker.Select(expression, utils.getName("writeInline"));
         writeExpression = maker.Apply(List.<JCExpression>nil(), writeExpression,
@@ -109,7 +121,7 @@ public class StatementFactory {
         JCExpression expression = maker.Select(ident("in"), utils.getName("readByte"));
         expression = maker.Apply(List.<JCExpression>nil(), expression, List.<JCExpression>nil());
 
-        JCExpression condition = maker.Binary(OpCode.NOT_EQUALS.value, expression, maker.Literal(-1));
+        JCExpression condition = maker.Binary(Tag.NE, expression, maker.Literal(-1));
 
         JCExpression expression1 = maker.Assign(ident(var.name.toString()),
                 maker.NewClass(null, List.<JCExpression>nil(), ident(var.vartype.toString()), List.<JCExpression>nil(), null));
@@ -120,8 +132,8 @@ public class StatementFactory {
                 List.of((JCExpression) ident("in"), ident(var.name.toString())));
 
         JCBlock block = maker.Block(0, List.of((JCStatement) maker.Exec(expression1), maker.Exec(expression2)));
-
-        JCExpression elseExpr = maker.Assign(ident(var.name.toString()), maker.Literal(NULL_LITERAL, null));
+        // see comments to nullLiteral()
+        JCExpression elseExpr = maker.Assign(ident(var.name.toString()), nullLiteral());
         return maker.If(condition, block, maker.Exec(elseExpr));
     }
 
@@ -298,8 +310,8 @@ public class StatementFactory {
         JCExpression nullExpr = makeDxlibIOUtilsSelect();
         nullExpr = maker.Select(nullExpr, utils.getName("writeCompactInt"));
         nullExpr = maker.Apply(List.<JCExpression>nil(), nullExpr, List.of(ident("out"), maker.Literal(-1)));
-
-        JCExpression cond = maker.Binary(OpCode.NOT_EQUALS.value, ident(var.name.toString()), maker.Literal(NULL_LITERAL, null));
+        // see comments to nullLiteral()
+        JCExpression cond = maker.Binary(Tag.NE, ident(var.name.toString()), nullLiteral());
         return maker.If(cond, maker.Exec(notNullExpr), maker.Exec(nullExpr));
     }
 
@@ -310,13 +322,13 @@ public class StatementFactory {
         JCExpression readIntExpr = makeDxlibIOUtilsSelect();
         readIntExpr = maker.Select(readIntExpr, utils.getName("readCompactInt"));
         readIntExpr = maker.Apply(List.<JCExpression>nil(), readIntExpr, List.of((JCExpression) ident("in")));
-        JCStatement intVarDef = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "ord"), maker.TypeIdent(TypeTags.INT), readIntExpr);
+        JCStatement intVarDef = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "ord"), maker.TypeIdent(TypeTag.INT), readIntExpr);
 
         JCExpression expression = ident(var.vartype.toString());
         expression = maker.Select(expression, utils.getName("findByCode"));
         expression = maker.Apply(List.<JCExpression>nil(), expression, List.of(classExpr, ident(var.name.toString() + "ord")));
 
-        JCBinary cond = maker.Binary(OpCode.NOT_EQUALS.value, ident(var.name.toString() + "ord"), maker.Literal(-1));
+        JCBinary cond = maker.Binary(Tag.NE, ident(var.name.toString() + "ord"), maker.Literal(-1));
         JCIf jcIf = maker.If(cond, maker.Exec(maker.Assign(ident(var.name.toString()), expression)), null);
 
         return maker.Block(0, List.of(intVarDef, jcIf));
@@ -373,7 +385,8 @@ public class StatementFactory {
         writeMinusOne = maker.Select(writeMinusOne, utils.getName("writeCompactInt"));
         writeMinusOne = maker.Apply(List.<JCExpression>nil(), writeMinusOne,
                 List.of(ident("out"), maker.Literal(-1)));
-        JCBinary binary = maker.Binary(OpCode.NOT_EQUALS.value, ident(var.name.toString()), maker.Literal(NULL_LITERAL, null));
+        // see comments to nullLiteral()
+        JCBinary binary = maker.Binary(Tag.NE, ident(var.name.toString()), nullLiteral());
         return maker.If(binary, maker.Block(0, List.of(statement1, statement2)), maker.Block(0, List.of((JCStatement) maker.Exec(writeMinusOne))));
     }
 
@@ -396,7 +409,8 @@ public class StatementFactory {
         writeMinusOne = maker.Select(writeMinusOne, utils.getName("writeCompactInt"));
         writeMinusOne = maker.Apply(List.<JCExpression>nil(), writeMinusOne,
                 List.of(ident("out"), maker.Literal(-1)));
-        JCBinary binary = maker.Binary(OpCode.NOT_EQUALS.value, ident(var.name.toString()), maker.Literal(NULL_LITERAL, null));
+        // see comments to nullLiteral()
+        JCBinary binary = maker.Binary(Tag.NE, ident(var.name.toString()), nullLiteral());
         return maker.If(binary, maker.Block(0, List.of(statement1, statement2)), maker.Block(0, List.of((JCStatement) maker.Exec(writeMinusOne))));
     }
 
@@ -436,7 +450,7 @@ public class StatementFactory {
         writeMinusOne = maker.Select(writeMinusOne, utils.getName("writeCompactInt"));
         writeMinusOne = maker.Apply(List.<JCExpression>nil(), writeMinusOne,
                 List.of(ident("out"), maker.Literal(-1)));
-        JCBinary binary = maker.Binary(OpCode.NOT_EQUALS.value, ident(var.name.toString()), maker.Literal(NULL_LITERAL, null));
+        JCBinary binary = maker.Binary(Tag.NE, ident(var.name.toString()), nullLiteral());
         return maker.If(binary, maker.Block(0, List.of(statement1, statement2)), maker.Block(0, List.of((JCStatement) maker.Exec(writeMinusOne))));
     }
 
@@ -444,14 +458,14 @@ public class StatementFactory {
         JCExpression expression1 = makeDxlibIOUtilsSelect();
         expression1 = maker.Select(expression1, utils.getName("readCompactInt"));
         expression1 = maker.Apply(List.<JCExpression>nil(), expression1, List.of((JCExpression) ident("in")));
-        JCVariableDecl statement1 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "size"), maker.TypeIdent(TypeTags.INT), expression1);
+        JCVariableDecl statement1 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "size"), maker.TypeIdent(TypeTag.INT), expression1);
 
         JCTypeApply typeApply = (JCTypeApply) (var.vartype);
         JCExpression expression2 = maker.Assign(ident(var.name.toString()),
                 maker.NewClass(null, List.<JCExpression>nil(), maker.TypeApply(typeApply.clazz, List.<JCExpression>nil()), List.<JCExpression>nil(), null));
         JCStatement statement2 = maker.Exec(expression2);
 
-        JCVariableDecl statement31 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "elem"), typeApply.arguments.get(0), maker.Literal(NULL_LITERAL, null));
+        JCVariableDecl statement31 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "elem"), typeApply.arguments.get(0), nullLiteral());
 
         JCStatement statement32 = new StatementFactory(maker, utils, statement31).compactReadStatement();
 
@@ -459,12 +473,12 @@ public class StatementFactory {
         JCStatement statement33 = maker.Exec(maker.Apply(List.<JCExpression>nil(), select33,
                 List.of((JCExpression) ident(statement31.name.toString()))));
 
-        JCStatement init = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "index"), maker.TypeIdent(TypeTags.INT), maker.Literal(0));
-        JCExpression cond = maker.Binary(OpCode.LESSER.value, ident(var.name.toString() + "index"), ident(var.name.toString() + "size"));
-        JCExpressionStatement step = maker.Exec(maker.Unary(OpCode.UNARY_POST_INC.value, ident(var.name.toString() + "index")));
+        JCStatement init = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "index"), maker.TypeIdent(TypeTag.INT), maker.Literal(0));
+        JCExpression cond = maker.Binary(Tag.LT, ident(var.name.toString() + "index"), ident(var.name.toString() + "size"));
+        JCExpressionStatement step = maker.Exec(maker.Unary(Tag.POSTINC, ident(var.name.toString() + "index")));
         JCStatement statement3 = maker.ForLoop(List.of(init), cond, List.of(step), maker.Block(0, List.of(statement31, statement32, statement33)));
 
-        JCBinary binary = maker.Binary(OpCode.NOT_EQUALS.value, ident(var.name.toString() + "size"), maker.Literal(-1));
+        JCBinary binary = maker.Binary(Tag.NE, ident(var.name.toString() + "size"), maker.Literal(-1));
         return maker.Block(0, List.of(statement1, maker.If(binary, maker.Block(0, List.of(statement2, statement3)), null)));
     }
 
@@ -475,7 +489,7 @@ public class StatementFactory {
         JCExpression expression1 = makeDxlibIOUtilsSelect();
         expression1 = maker.Select(expression1, utils.getName("readCompactInt"));
         expression1 = maker.Apply(List.<JCExpression>nil(), expression1, List.of((JCExpression) ident("in")));
-        JCVariableDecl statement1 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "size"), maker.TypeIdent(TypeTags.INT), expression1);
+        JCVariableDecl statement1 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "size"), maker.TypeIdent(TypeTag.INT), expression1);
 
         JCArrayTypeTree arrayTypeTree = (JCArrayTypeTree) (var.vartype);
         JCExpression expression2 = maker.Assign(ident(var.name.toString()),
@@ -489,12 +503,12 @@ public class StatementFactory {
         JCStatement statement33 = maker.Exec(maker.Assign(maker.Indexed(ident(var.name.toString()),
                 ident(var.name.toString() + "index")), ident(var.name.toString() + "elem")));
 
-        JCStatement init = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "index"), maker.TypeIdent(TypeTags.INT), maker.Literal(0));
-        JCExpression cond = maker.Binary(OpCode.LESSER.value, ident(var.name.toString() + "index"), ident(var.name.toString() + "size"));
-        JCExpressionStatement step = maker.Exec(maker.Unary(OpCode.UNARY_POST_INC.value, ident(var.name.toString() + "index")));
+        JCStatement init = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "index"), maker.TypeIdent(TypeTag.INT), maker.Literal(0));
+        JCExpression cond = maker.Binary(Tag.LT, ident(var.name.toString() + "index"), ident(var.name.toString() + "size"));
+        JCExpressionStatement step = maker.Exec(maker.Unary(Tag.POSTINC, ident(var.name.toString() + "index")));
         JCStatement statement3 = maker.ForLoop(List.of(init), cond, List.of(step), maker.Block(0, List.of(statement31, statement32, statement33)));
 
-        JCBinary binary = maker.Binary(OpCode.NOT_EQUALS.value, ident(var.name.toString() + "size"), maker.Literal(-1));
+        JCBinary binary = maker.Binary(Tag.NE, ident(var.name.toString() + "size"), maker.Literal(-1));
         return maker.Block(0, List.of(statement1, maker.If(binary, maker.Block(0, List.of(statement2, statement3)), null)));
     }
 
@@ -502,18 +516,18 @@ public class StatementFactory {
         JCExpression expression1 = makeDxlibIOUtilsSelect();
         expression1 = maker.Select(expression1, utils.getName("readCompactInt"));
         expression1 = maker.Apply(List.<JCExpression>nil(), expression1, List.of((JCExpression) ident("in")));
-        JCVariableDecl statement1 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "size"), maker.TypeIdent(TypeTags.INT), expression1);
+        JCVariableDecl statement1 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "size"), maker.TypeIdent(TypeTag.INT), expression1);
 
         JCTypeApply typeApply = (JCTypeApply) (var.vartype);
         JCExpression expression2 = maker.Assign(ident(var.name.toString()),
                 maker.NewClass(null, List.<JCExpression>nil(), maker.TypeApply(typeApply.clazz, List.<JCExpression>nil()), List.<JCExpression>nil(), null));
         JCStatement statement2 = maker.Exec(expression2);
 
-        JCVariableDecl statement31 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "key"), typeApply.arguments.get(0), maker.Literal(NULL_LITERAL, null));
+        JCVariableDecl statement31 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "key"), typeApply.arguments.get(0), nullLiteral());
 
         JCStatement statement32 = new StatementFactory(maker, utils, statement31).compactReadStatement();
 
-        JCVariableDecl statement33 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "value"), typeApply.arguments.get(1), maker.Literal(NULL_LITERAL, null));
+        JCVariableDecl statement33 = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "value"), typeApply.arguments.get(1), nullLiteral());
 
         JCStatement statement34 = new StatementFactory(maker, utils, statement33).compactReadStatement();
 
@@ -521,12 +535,12 @@ public class StatementFactory {
         JCStatement statement35 = maker.Exec(maker.Apply(List.<JCExpression>nil(), select35,
                 List.of((JCExpression) ident(statement31.name.toString()), ident(statement33.name.toString()))));
 
-        JCStatement init = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "index"), maker.TypeIdent(TypeTags.INT), maker.Literal(0));
-        JCExpression cond = maker.Binary(OpCode.LESSER.value, ident(var.name.toString() + "index"), ident(var.name.toString() + "size"));
-        JCExpressionStatement step = maker.Exec(maker.Unary(OpCode.UNARY_POST_INC.value, ident(var.name.toString() + "index")));
+        JCStatement init = maker.VarDef(maker.Modifiers(0), utils.getName(var.name.toString() + "index"), maker.TypeIdent(TypeTag.INT), maker.Literal(0));
+        JCExpression cond = maker.Binary(Tag.LT, ident(var.name.toString() + "index"), ident(var.name.toString() + "size"));
+        JCExpressionStatement step = maker.Exec(maker.Unary(Tag.POSTINC, ident(var.name.toString() + "index")));
         JCStatement statement3 = maker.ForLoop(List.of(init), cond, List.of(step), maker.Block(0, List.of(statement31, statement32, statement33, statement34, statement35)));
 
-        JCBinary binary = maker.Binary(OpCode.NOT_EQUALS.value, ident(var.name.toString() + "size"), maker.Literal(-1));
+        JCBinary binary = maker.Binary(Tag.NE, ident(var.name.toString() + "size"), maker.Literal(-1));
         return maker.Block(0, List.of(statement1, maker.If(binary, maker.Block(0, List.of(statement2, statement3)), null)));
     }
 
@@ -648,9 +662,17 @@ public class StatementFactory {
 
         public static SerializationStrategyRecord getByVariable(JCVariableDecl var) {
             try {
-                List<Attribute.Compound> annotationAttributes = var.mods.annotations.get(0).type.tsym.attributes_field;
+
+               // List<Attribute.Compound> annotationAttributes = var.mods.annotations.get(0).type.tsym.attributes_field;
                 Attribute.Compound strategyCompound = null;
-                for (Attribute.Compound ac : annotationAttributes) {
+               /* for (Attribute.Compound ac : annotationAttributes) {
+                    if (ac.type.toString().endsWith("AutoSerializationStrategy")) {
+                        strategyCompound = ac;
+                    }
+                }*/
+
+                for (JCAnnotation annotation :  var.mods.annotations) {
+                    Attribute.Compound ac = annotation.attribute;
                     if (ac.type.toString().endsWith("AutoSerializationStrategy")) {
                         strategyCompound = ac;
                     }
